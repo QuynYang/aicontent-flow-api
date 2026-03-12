@@ -1,0 +1,7 @@
+# Bỏ qua file cấu hình môi trường
+.env
+
+# Bỏ qua chìa khóa Google API
+oauth-credentials.json
+token.json
+google-credentials.json
