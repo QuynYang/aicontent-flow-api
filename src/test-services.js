@@ -1,6 +1,7 @@
 require('dotenv').config();
 const AIProviderFactory = require('./infrastructure/services/ai/AIProviderFactory');
 const googleWorkspaceFacade = require('./infrastructure/services/google/GoogleWorkspaceFacade');
+const puppeteerManager = require('./infrastructure/services/spineditor/PuppeteerBrowserManager');
 
 async function runTest() {
   console.log('=== 🚀 BẮT ĐẦU TEST DỊCH VỤ ===\n');
@@ -41,6 +42,27 @@ async function runTest() {
     
   } catch (error) {
     console.error('❌ [Lỗi Google Workspace]:', error.message);
+  }
+
+  console.log('\n---------------------------------------------------------\n');
+
+  // ---------------------------------------------------------
+  // 3. TEST SPINEDITOR & PUPPETEER (MẪU SINGLETON)
+  // ---------------------------------------------------------
+  try {
+    console.log('>> 3. Đang test Spineditor Client (Puppeteer)...');
+    
+    // Mở thử trình duyệt lên xem Singleton hoạt động không
+    const browser = await puppeteerManager.getBrowser();
+    const pages = await browser.pages();
+    console.log(`✅ [Puppeteer]: Trình duyệt đã khởi tạo ngầm thành công với ${pages.length} tab mặc định.`);
+    
+    // Đóng dọn dẹp để giải phóng RAM
+    await puppeteerManager.closeBrowser();
+    console.log('✅ [Puppeteer]: Đã dọn dẹp và đóng trình duyệt an toàn.');
+
+  } catch (error) {
+    console.error('❌ [Lỗi Spineditor/Puppeteer]:', error.message);
   }
 
   console.log('\n=== 🏁 KẾT THÚC TEST ===');

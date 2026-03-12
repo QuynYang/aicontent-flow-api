@@ -24,8 +24,10 @@ class GoogleWorkspaceFacade {
     const token = JSON.parse(fs.readFileSync(tokenPath));
     this.auth.setCredentials(token);
 
-    // Bật dịch vụ Drive với quyền của chính bạn
+    // Bật dịch vụ Drive, Docs và Sheets với quyền của chính bạn
     this.drive = google.drive({ version: 'v3', auth: this.auth });
+    this.docs = google.docs({ version: 'v1', auth: this.auth });
+    this.sheets = google.sheets({ version: 'v4', auth: this.auth });
   }
 
   /**
@@ -111,6 +113,53 @@ class GoogleWorkspaceFacade {
       campaignFolderUrl: campaignFolder.webViewLink,
       articles: results
     };
+  }
+
+  /**
+   * Đọc danh sách từ khóa từ một file Google Sheet
+   * Giả định các từ khóa nằm ở Cột A, từ dòng 2 trở đi (Sheet1!A2:A)
+   */
+  async readKeywordsFromSheet(sheetId, range = 'Sheet1!A2:A') {
+    try {
+      console.log(`📊 [Google Sheets] Đang đọc dữ liệu từ Sheet ID: ${sheetId}...`);
+      const response = await this.sheets.spreadsheets.values.get({
+        spreadsheetId: sheetId,
+        range: range,
+      });
+      
+      const rows = response.data.values;
+      if (!rows || rows.length === 0) return [];
+      
+      // Lấy phần tử đầu tiên của mỗi mảng (Cột A) và lọc bỏ các dòng trống
+      return rows.map(row => row[0]).filter(Boolean); 
+    } catch (error) {
+      throw new ExternalAPIError('Google Sheets', `Lỗi đọc Sheet: ${error.message}`);
+    }
+  }
+
+  /**
+   * Ghi nối (append) văn bản vào một file Google Docs có sẵn
+   */
+  async appendContentToDoc(docId, text) {
+    try {
+      console.log(`✍️ [Google Docs] Đang ghi văn bản vào tài liệu ID: ${docId}...`);
+      await this.docs.documents.batchUpdate({
+        documentId: docId,
+        requestBody: {
+          requests: [
+            {
+              insertText: {
+                location: { index: 1 }, // Ghi chèn lên đầu trang
+                text: text + '\n\n'
+              }
+            }
+          ]
+        }
+      });
+      console.log(`✅ [Google Docs] Đã ghi thành công.`);
+    } catch (error) {
+      throw new ExternalAPIError('Google Docs', `Lỗi ghi nội dung: ${error.message}`);
+    }
   }
 }
 
