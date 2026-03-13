@@ -78,46 +78,41 @@ class GoogleWorkspaceFacade {
   }
 
   /**
-   * HÀM MẶT TIỀN (FACADE METHOD): Được gọi bởi Use Case
-   * Nhận danh sách từ khóa -> Tạo Folder cha -> Trả về danh sách Link Docs tương ứng
-   * @param {string} campaignName - Tên chiến dịch (dùng làm tên Folder)
-   * @param {Array<string>} keywords - Mảng các từ khóa (VD: ["Bàn phím cơ", "Chuột không dây"])
-   * @param {string} rootFolderId - ID của thư mục gốc trên Drive
-   * @returns {Promise<Object>} Thông tin Folder cha và danh sách bài viết
+   * HÀM MẶT TIỀN (FACADE METHOD): Được gọi bởi Use Case TRANG 1
+   * Nhận danh sách từ khóa -> Tạo Folder RIÊNG cho từng từ khóa -> Tạo Docs bên trong
    */
   async initializeContentWorkspace(campaignName, keywords, rootFolderId) {
-    console.log(`📁 [Workspace] Đang khởi tạo không gian làm việc cho: ${campaignName}`);
-    
-    // 1. Tạo thư mục chứa riêng cho Campaign này
-    const campaignFolder = await this._createFolder(campaignName, rootFolderId);
-    
+    console.log(`📁 [Workspace] Đang xử lý ${keywords.length} từ khóa...`);
     const results = [];
 
-    // 2. Lặp qua từng từ khóa để tạo file Docs
-    // Dùng for...of thay vì Promise.all để tránh bị Google API block do spam request quá nhanh
+    // Lặp qua từng từ khóa để tạo Folder và Docs tương ứng
     for (const keyword of keywords) {
-      console.log(`📄 [Workspace] Đang tạo file Docs cho từ khóa: ${keyword}`);
-      const docInfo = await this._createDoc(`[SEO] ${keyword}`, campaignFolder.id);
+      console.log(`▶️ Đang tạo tài nguyên cho: [${keyword}]`);
+      
+      // 1. Tạo thư mục riêng mang tên từ khóa
+      const keywordFolder = await this._createFolder(keyword, rootFolderId);
+      
+      // 2. Tạo file Docs nằm TRONG thư mục vừa tạo
+      const docInfo = await this._createDoc(`${keyword}`, keywordFolder.id);
       
       results.push({
         keyword: keyword,
+        folderId: keywordFolder.id,
+        folderUrl: keywordFolder.webViewLink,
         docId: docInfo.docId,
         docUrl: docInfo.docUrl
       });
     }
 
-    console.log(`✅ [Workspace] Khởi tạo thành công ${keywords.length} files.`);
-
+    console.log(`✅ [Workspace] Khởi tạo thành công ${keywords.length} bộ thư mục & bài viết.`);
+    
     return {
-      campaignFolderId: campaignFolder.id,
-      campaignFolderUrl: campaignFolder.webViewLink,
       articles: results
     };
   }
 
   /**
    * Đọc danh sách từ khóa từ một file Google Sheet
-   * Giả định các từ khóa nằm ở Cột A, từ dòng 2 trở đi (Sheet1!A2:A)
    */
   async readKeywordsFromSheet(sheetId, range = 'Sheet1!A2:A') {
     try {
@@ -130,7 +125,7 @@ class GoogleWorkspaceFacade {
       const rows = response.data.values;
       if (!rows || rows.length === 0) return [];
       
-      // Lấy phần tử đầu tiên của mỗi mảng (Cột A) và lọc bỏ các dòng trống
+      // Lấy phần tử đầu tiên của mỗi mảng (Cột được chỉ định) và lọc bỏ các dòng trống
       return rows.map(row => row[0]).filter(Boolean); 
     } catch (error) {
       throw new ExternalAPIError('Google Sheets', `Lỗi đọc Sheet: ${error.message}`);
@@ -159,6 +154,59 @@ class GoogleWorkspaceFacade {
       console.log(`✅ [Google Docs] Đã ghi thành công.`);
     } catch (error) {
       throw new ExternalAPIError('Google Docs', `Lỗi ghi nội dung: ${error.message}`);
+    }
+  }
+
+  /**
+   * Ghi mảng dữ liệu ngược lại vào Google Sheet (Dùng cho Trang 1)
+   * @param {string} sheetId - ID của file Google Sheet
+   * @param {string} range - Vùng dữ liệu cần ghi (VD: 'Sheet1!B2:C10')
+   * @param {Array<Array<string>>} values - Mảng 2 chiều chứa Link Drive và Link Docs
+   */
+  async writeDataToSheet(sheetId, range, values) {
+    try {
+      console.log(`📝 [Google Sheets] Đang ghi ${values.length} dòng dữ liệu vào dải ô ${range}...`);
+      const response = await this.sheets.spreadsheets.values.update({
+        spreadsheetId: sheetId,
+        range: range,
+        valueInputOption: 'USER_ENTERED', // Để Google Sheet tự nhận diện dạng text thành link
+        requestBody: {
+          values: values
+        }
+      });
+      console.log('✅ [Google Sheets] Đã ghi link thành công!');
+      return response.data;
+    } catch (error) {
+      throw new ExternalAPIError('Google Sheets', `Lỗi ghi Sheet: ${error.message}`);
+    }
+  }
+
+  /**
+   * Đọc toàn bộ nội dung văn bản (Text) từ một file Google Docs
+   * Dùng cho Trang 3: Đọc dàn ý để viết bài chi tiết
+   */
+  async readDocContent(docId) {
+    try {
+      console.log(`📖 [Google Docs] Đang đọc nội dung từ tài liệu ID: ${docId}...`);
+      const doc = await this.docs.documents.get({ documentId: docId });
+      
+      let fullText = '';
+      const content = doc.data.body.content;
+      
+      // Bóc tách text từ cấu trúc JSON phức tạp của Google Docs
+      content.forEach(element => {
+        if (element.paragraph) {
+          element.paragraph.elements.forEach(elem => {
+            if (elem.textRun) {
+              fullText += elem.textRun.content;
+            }
+          });
+        }
+      });
+      
+      return fullText.trim();
+    } catch (error) {
+      throw new ExternalAPIError('Google Docs', `Lỗi đọc nội dung: ${error.message}`);
     }
   }
 }
