@@ -16,4 +16,16 @@ const ARTICLE_STATUS = Object.freeze({
   FAILED: 'FAILED'                        // Lỗi chí mạng (hết lượt retry, rớt mạng...)
 });
 
-module.exports = ARTICLE_STATUS;
+module.exports = {
+  QUEUED: 'QUEUED',                             // Chờ xử lý (Xong Trang 1)
+  
+  GENERATING_OUTLINE: 'GENERATING_OUTLINE',     // Đang viết dàn ý
+  OUTLINE_COMPLETED: 'OUTLINE_COMPLETED',       // Đã xong dàn ý (Xong Trang 2)
+  
+  GENERATING_CONTENT: 'GENERATING_CONTENT',     // Đang viết nội dung
+  CONTENT_COMPLETED: 'CONTENT_COMPLETED',       // Đã xong nội dung (Xong Trang 3)
+  
+  CHECKING_SEO: 'CHECKING_SEO',                 // Đang chấm điểm SEO
+  COMPLETED: 'COMPLETED',                       // Hoàn tất toàn bộ
+  FAILED: 'FAILED'                              // Lỗi
+};

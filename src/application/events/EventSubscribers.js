@@ -1,37 +1,27 @@
 const EventBus = require('../../domain/events/EventBus');
-const QueueManager = require('../../infrastructure/messaging/bullmq/QueueManager');
-const Article = require('../../infrastructure/database/mongoose/ArticleSchema');
 
 class EventSubscribers {
   static initialize() {
-    // 1. Lắng nghe sự kiện: Đã khởi tạo Workspace xong (Có danh sách bài viết)
-    EventBus.on('WORKSPACE_INITIALIZED', async ({ campaignId }) => {
-      console.log(`\n🔔 [Event] Bắt được sự kiện WORKSPACE_INITIALIZED cho Campaign: ${campaignId}`);
-      
-      // Tìm tất cả các bài viết thuộc chiến dịch này đang ở trạng thái QUEUED
-      const articles = await Article.find({ campaignId: campaignId, status: 'QUEUED' });
-      
-      // Ném từng bài vào Queue để AI viết bài
-      for (const article of articles) {
-        await QueueManager.generateContentQueue.add('generate-content', { articleId: article._id });
-        console.log(`📥 [Queue] Đã đẩy bài viết [${article.keyword}] vào hàng đợi Viết AI.`);
-      }
+    console.log('🎧 [EventSubscribers] Đã tắt chế độ chạy chuyền tay. Chuyển sang chế độ đợi lệnh từ Trang UI.');
+
+    // Chỉ in ra Log để theo dõi, KHÔNG tự động đẩy vào Queue nữa!
+    // Việc đẩy vào Queue bây giờ sẽ do Frontend gọi API (Trang 2, Trang 3) quyết định.
+
+    EventBus.on('WORKSPACE_INITIALIZED', ({ campaignId }) => {
+      console.log(`\n🔔 [Event] Campaign ${campaignId} đã khởi tạo xong! Đang chờ người dùng bấm chạy Trang 2...`);
     });
 
-    // 2. Lắng nghe sự kiện: AI đã viết bài xong -> Ném sang hàng đợi Chấm điểm SEO
-    EventBus.on('CONTENT_GENERATED', async ({ articleId }) => {
-      console.log(`\n🔔 [Event] Bắt được sự kiện CONTENT_GENERATED cho Article: ${articleId}`);
-      await QueueManager.checkSeoQueue.add('check-seo', { articleId });
-      console.log(`📥 [Queue] Đã đẩy bài viết vào hàng đợi Chấm SEO.`);
+    EventBus.on('OUTLINE_GENERATED', ({ articleId }) => {
+      console.log(`\n🔔 [Event] Bài viết ${articleId} đã có Dàn Ý! Đang chờ người dùng kiểm tra hoặc bấm chạy Trang 3...`);
     });
 
-    // 3. Lắng nghe sự kiện: Chấm SEO phát hiện lỗi -> Ném sang hàng đợi Tự sửa lỗi (Auto Fix)
-    EventBus.on('SEO_FAILED', async ({ articleId }) => {
-      console.log(`\n🔔 [Event] Bắt được sự kiện SEO_FAILED. Đưa vào luồng cấp cứu...`);
-      await QueueManager.autoFixQueue.add('auto-fix', { articleId });
+    EventBus.on('CONTENT_GENERATED', ({ articleId }) => {
+      console.log(`\n🔔 [Event] Bài viết ${articleId} đã viết xong Nội Dung! Đang chờ chấm điểm SEO...`);
     });
 
-    console.log('🎧 [EventSubscribers] Đã bật tai nghe, sẵn sàng bắt sự kiện.');
+    EventBus.on('SEO_FAILED', ({ articleId }) => {
+      console.log(`\n🔔 [Event] Bài viết ${articleId} rớt điểm SEO. Đang chờ đưa vào luồng Auto-Fix...`);
+    });
   }
 }
 
